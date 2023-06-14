@@ -1,0 +1,21 @@
+version: '3'
+services:
+  kafka-connect:
+    command:
+      - bash
+      - -c
+      - |
+        echo "Installing Connector"
+        confluent-hub install --no-prompt debezium/debezium-connector-mysql:1.7.0
+        echo "Launching Kafka Connect worker"
+        /etc/confluent/docker/run &
+        sleep infinity
+
+  mysql:
+    image: mysql:8.0
+    ports:
+      - 3306:3306
+    environment:
+     - MYSQL_ROOT_PASSWORD=hardtoguess
+    volumes:
+     - ${PWD}/data/mysql:/docker-entrypoint-initdb.d
