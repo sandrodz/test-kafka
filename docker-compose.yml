@@ -1,0 +1,132 @@
+version: '3'
+services:
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    ports:
+      - 8080:8080
+    environment:
+      DYNAMIC_CONFIG_ENABLED: true
+      KAFKA_CLUSTERS_0_NAME: test-kafka-quorum
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: 'kafka1:29092,kafka2:29092,kafka3:29092'
+    depends_on:
+      - kafka1
+      - kafka2
+      - kafka3
+
+  kafka-connect:
+    image: confluentinc/cp-kafka-connect:latest
+    ports:
+      - 8083:8083
+    environment:
+      CONNECT_BOOTSTRAP_SERVERS: 'kafka1:29092,kafka2:29092,kafka3:29092'
+      CONNECT_REST_PORT: 8083
+      CONNECT_GROUP_ID: kafka-connect
+      CONNECT_CONFIG_STORAGE_TOPIC: _connect-configs
+      CONNECT_OFFSET_STORAGE_TOPIC: _connect-offsets
+      CONNECT_STATUS_STORAGE_TOPIC: _connect-status
+      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+      CONNECT_VALUE_CONVERTER: io.confluent.connect.avro.AvroConverter
+      CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: 'http://schema-registry:8081'
+      CONNECT_REST_ADVERTISED_HOST_NAME: kafka-connect
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 3
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 3
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 3
+      CONNECT_PLUGIN_PATH: '/usr/share/java,/usr/share/confluent-hub-components,/data/connect-jars'
+    depends_on:
+      - kafka1
+      - kafka2
+      - kafka3
+
+  # https://docs.confluent.io/platform/current/schema-registry/installation/config.html
+  schema-registry:
+    image: confluentinc/cp-schema-registry
+    ports:
+      - "8081:8081"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'kafka1:29092,kafka2:29092,kafka3:29092'
+      SCHEMA_REGISTRY_LISTENERS: 'http://0.0.0.0:8081'
+    depends_on:
+      - kafka1
+      - kafka2
+      - kafka3
+
+  kafka1:
+    image: confluentinc/cp-kafka
+    ports:
+      - "9092:9092"
+    environment:
+      # The 32-bit ID uniquely identifying the Kafka node.
+      KAFKA_NODE_ID: 1
+      # Comma-separated names used by the controller.
+      # In KRaft mode it must be set because the default is the PLAINTEXT protocol.
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      # Maps listener names to the corresponding security protocols.
+      # We assigned three listeners (CONTROLLER, INTERNAL, and EXTERNAL)
+      # to the un-authenticated and non-encrypted PLAINTEXT security protocol.
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT'
+      # CONTROLLER is for controller quorum communication,
+      # INTERNAL is for internal communication between DATA PLANE brokers
+      # (our mixed nodes belong to both DATA PLANE and CONTROL PLANE),
+      # as well as for clients on the same network as the brokers (such as Schema Registry).
+      # EXTERNAL is for communication with clients outside the broker’s network,
+      # such as an application running on your computer connecting to the Kafka cluster running in Docker.
+      KAFKA_LISTENERS: 'INTERNAL://kafka1:29092,CONTROLLER://kafka1:29093,EXTERNAL://0.0.0.0:9092'
+      # The address advertised to the clients. If not set, it defaults to the KAFKA_LISTENERS.
+      KAFKA_ADVERTISED_LISTENERS: 'INTERNAL://kafka1:29092,EXTERNAL://localhost:9092'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'INTERNAL'
+      # Comma-separated list of controller voters, using the format {controller-id}@{controller-host):{controller-port}.
+      # Controllers in the quorum use port 29093.
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka1:29093,2@kafka2:29093,3@kafka3:29093'
+      # Specifies the role of the node: broker, controller, or both (in the case of mixed nodes).
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      # The delay used by the GroupCoordinator to start the initial rebalance, when the first member joins an empty group.
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      # Replication factor for the __kafka_offsets, the topic storing committed offsets.
+      # Default is 1 but we adjusted to 3 in our 3-brokers cluster.
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      # Replication factor for the __transaction_state, the topic that stores the transaction state,
+      # and is automatically created at the first request to transactional API.
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      # A unique 16-byte base64 UUID for the cluster. Can be generated online, or with or with bin/kafka-storage.sh random-uuid.
+      CLUSTER_ID: 'ciWo7IWazngRchmPES6q5A=='
+      # Comma-separated list of directories to store the log files.
+      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
+
+  kafka2:
+    image: confluentinc/cp-kafka
+    ports:
+      - "9093:9093"
+    environment:
+      KAFKA_NODE_ID: 2
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT'
+      KAFKA_LISTENERS: 'INTERNAL://kafka2:29092,CONTROLLER://kafka2:29093,EXTERNAL://0.0.0.0:9093'
+      KAFKA_ADVERTISED_LISTENERS: 'INTERNAL://kafka2:29092,EXTERNAL://localhost:9093'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'INTERNAL'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka1:29093,2@kafka2:29093,3@kafka3:29093'
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      CLUSTER_ID: 'ciWo7IWazngRchmPES6q5A=='
+      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
+
+  kafka3:
+    image: confluentinc/cp-kafka
+    ports:
+      - "9094:9094"
+    environment:
+      KAFKA_NODE_ID: 3
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT'
+      KAFKA_LISTENERS: 'INTERNAL://kafka3:29092,CONTROLLER://kafka3:29093,EXTERNAL://0.0.0.0:9094'
+      KAFKA_ADVERTISED_LISTENERS: 'INTERNAL://kafka3:29092,EXTERNAL://localhost:9094'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'INTERNAL'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka1:29093,2@kafka2:29093,3@kafka3:29093'
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      CLUSTER_ID: 'ciWo7IWazngRchmPES6q5A=='
+      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
